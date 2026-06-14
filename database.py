@@ -59,11 +59,15 @@ def init_db():
                 status TEXT DEFAULT 'ready',
                 delivery_count INTEGER DEFAULT 0,
                 created_at REAL NOT NULL,
+                delivered_at REAL,
+                consumed_at REAL,
                 FOREIGN KEY (queue_id) REFERENCES queues(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_messages_queue_status ON messages(queue_id, status);
             CREATE INDEX IF NOT EXISTS idx_messages_available ON messages(available_at);
+            CREATE INDEX IF NOT EXISTS idx_messages_priority ON messages(queue_id, status, priority DESC, id ASC);
+            CREATE INDEX IF NOT EXISTS idx_messages_correlation ON messages(correlation_id);
 
             CREATE TABLE IF NOT EXISTS exchanges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,12 +90,21 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 message_id INTEGER NOT NULL,
                 queue_id INTEGER NOT NULL,
+                correlation_id TEXT,
                 body TEXT NOT NULL,
                 action TEXT NOT NULL,
+                stage TEXT,
+                detail TEXT,
+                consumer_id TEXT,
+                consumer_group TEXT,
+                duration_ms REAL,
                 timestamp REAL NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_history_queue ON message_history(queue_id);
+            CREATE INDEX IF NOT EXISTS idx_history_message ON message_history(message_id);
+            CREATE INDEX IF NOT EXISTS idx_history_correlation ON message_history(correlation_id);
+            CREATE INDEX IF NOT EXISTS idx_history_timestamp ON message_history(timestamp);
 
             CREATE TABLE IF NOT EXISTS stats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,6 +114,28 @@ def init_db():
                 total_nacked INTEGER DEFAULT 0,
                 start_time REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                cron_expression TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                routing_key TEXT NOT NULL,
+                queue_name TEXT,
+                body TEXT NOT NULL,
+                priority INTEGER DEFAULT 0,
+                ttl INTEGER DEFAULT 0,
+                correlation_id TEXT,
+                reply_to TEXT,
+                description TEXT,
+                enabled INTEGER DEFAULT 1,
+                last_run_at REAL,
+                next_run_at REAL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled, next_run_at);
         """)
 
         cur.execute("SELECT COUNT(*) as cnt FROM stats")
